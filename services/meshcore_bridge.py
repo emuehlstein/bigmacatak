@@ -28,6 +28,7 @@ import argparse
 import datetime
 import json
 import logging
+import re
 import os
 import signal
 import sys
@@ -449,6 +450,20 @@ class MeshCoreBridge:
             log.debug(f"Empty message text from {msg_kind}/{msg_target}, skipping")
             return
 
+        # Detect wardriving messages: "@[MapperBot] lat, lon [power]"
+        mapper_match = re.match(
+            r'(.+?):\s*@\[MapperBot\]\s*(-?[\d.]+),\s*(-?[\d.]+)\s*\[([^\]]+)\]',
+            text,
+        )
+        if mapper_match:
+            sender_name = mapper_match.group(1).strip()
+            lat = float(mapper_match.group(2))
+            lon = float(mapper_match.group(3))
+            power = mapper_match.group(4).strip()
+            snr = inner.get("SNR")
+            self._handle_wardriving_point(sender_name, lat, lon, power, snr)
+            return
+
         msg_type = inner.get("type", msg_kind.upper())
 
         if msg_type == "CHAN" or msg_kind == "channel":
@@ -715,6 +730,76 @@ class MeshCoreBridge:
 
         gps_str = f"({lat:.6f}, {lon:.6f})" if has_gps else "(no GPS, cached={bool(cached)})"
         log.info(f"Advert (refresh): {callsign} {gps_str}")
+
+    # -- Wardriving handler --
+
+    def _handle_wardriving_point(self, sender: str, lat: float, lon: float, power: str, snr: float | None):
+        """Create a short-lived sensor marker for a wardriving data point.
+
+        Uses 'Wardriving' group (toggleable in ATAK) and 3-minute stale time
+        so points auto-fade when nobody's actively wardriving.
+        """
+        now = datetime.datetime.now(datetime.timezone.utc)
+        stale = now + datetime.timedelta(minutes=3)
+        fmt = "%Y-%m-%dT%H:%M:%SZ"
+
+        # Unique UID per point so they don't overwrite each other
+        point_id = hashlib.md5(f"{lat}{lon}{time.time()}".encode()).hexdigest()[:10]
+        uid = f"WD-{point_id}"
+
+        # Use sensor point type: a-f-G-E-S (friendly ground electronic sensor)
+        event = Element("event", {
+            "version": "2.0",
+            "uid": uid,
+            "type": "a-f-G-E-S",
+            "how": "m-g",
+            "time": now.strftime(fmt),
+            "start": now.strftime(fmt),
+            "stale": stale.strftime(fmt),
+        })
+
+        SubElement(event, "point", {
+            "lat": str(lat), "lon": str(lon), "hae": "0.0",
+            "ce": "50.0", "le": "50.0",
+        })
+
+        detail = SubElement(event, "detail")
+        SubElement(detail, "contact", {
+            "callsign": f"WD {sender} {power}",
+        })
+        SubElement(detail, "uid", {"Droid": f"WD {sender}"})
+
+        # Wardriving metadata
+        wd_attrs = {"power": power, "sender": sender}
+        if snr is not None:
+            wd_attrs["snr"] = str(snr)
+        SubElement(detail, "meshcore_wd", wd_attrs)
+
+        SubElement(detail, "remarks").text = f"{sender} {power} SNR:{snr or '?'}"
+
+        # Separate group for toggle control
+        SubElement(detail, "__group", {"name": "Wardriving", "role": "Team Member"})
+
+        cot_xml = tostring(event)
+
+        try:
+            self.rabbit.publish(uid, cot_xml, "Wardriving")
+            # Also publish to __ANON__ so all clients see it
+            body = json.dumps({"uid": uid, "cot": cot_xml.decode("utf-8")})
+            props = pika.BasicProperties(expiration="180000")  # 3 min TTL
+            self.rabbit.channel.basic_publish(
+                exchange="groups", routing_key="__ANON__.OUT",
+                body=body, properties=props,
+            )
+        except pika.exceptions.AMQPConnectionError:
+            log.warning("RabbitMQ connection lost during wardriving publish")
+            try:
+                self.rabbit.connect()
+                self.rabbit.publish(uid, cot_xml, "Wardriving")
+            except Exception as e:
+                log.error(f"RabbitMQ reconnect failed: {e}")
+
+        log.info(f"Wardriving: {sender} at ({lat}, {lon}) power={power} SNR={snr}")
 
     def _resolve_callsign(self, pubkey_prefix: str) -> str:
         """Try to resolve a pubkey prefix to a human-readable callsign.

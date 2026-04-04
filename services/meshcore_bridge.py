@@ -333,6 +333,15 @@ class MeshCoreBridge:
             #                   meshcore/battery
             #                   meshcore/device_info
 
+            # Companion advertisement topic
+            if len(parts) >= 2 and parts[-1] == "advertisement":
+                try:
+                    payload = json.loads(raw)
+                except json.JSONDecodeError:
+                    return
+                self._handle_advertisement(payload)
+                return
+
             # Companion rx_log / event topics (includes RX_LOG_DATA with advert data)
             if len(parts) >= 2 and parts[-1] in ("event", "rx_log"):
                 try:
@@ -527,6 +536,19 @@ class MeshCoreBridge:
         type_names = {0: "Unknown", 1: "Repeater", 2: "Chat Node", 3: "Room Server"}
         node_type = type_names.get(adv_type, f"Type-{adv_type}")
 
+        # Map to CoT type codes for different ATAK icons
+        # a-f-G-E-X-N = friendly ground electronic warfare node (tower icon) → repeater
+        # a-f-G-U-C   = friendly ground unit civilian (person icon) → chat node
+        # a-f-G-I-C   = friendly ground installation comms (building icon) → room server
+        # a-f-G-U     = friendly ground unit (generic) → unknown
+        cot_type_map = {
+            0: "a-f-G-U",       # Unknown → generic unit
+            1: "a-f-G-E-X-N",   # Repeater → electronic node (tower)
+            2: "a-f-G-U-C",     # Chat Node → civilian unit (person)
+            3: "a-f-G-I-C",     # Room Server → comms installation
+        }
+        cot_type = cot_type_map.get(adv_type, "a-f-G-U")
+
         uid = f"MeshCore-{adv_key[:16]}"
 
         # Build CoT — use actual GPS if available
@@ -536,6 +558,7 @@ class MeshCoreBridge:
             uid=uid,
             callsign=adv_name,
             node_type=node_type,
+            cot_type=cot_type,
             lat=adv_lat,
             lon=adv_lon,
             has_gps=has_gps,
@@ -553,9 +576,13 @@ class MeshCoreBridge:
             except Exception as e:
                 log.error(f"RabbitMQ reconnect failed: {e}")
 
-        # Update node cache
+        # Update node cache (used by advertisement handler for refresh)
         self.nodes[adv_key] = {
             "callsign": adv_name,
+            "lat": adv_lat,
+            "lon": adv_lon,
+            "node_type": node_type,
+            "cot_type": cot_type,
             "last_seen": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         }
 
@@ -572,11 +599,12 @@ class MeshCoreBridge:
         uid: str,
         callsign: str,
         node_type: str,
-        lat: float,
-        lon: float,
-        has_gps: bool,
-        snr: float | None,
-        rssi: float | None,
+        cot_type: str = "a-f-G-U-C",
+        lat: float = 0.0,
+        lon: float = 0.0,
+        has_gps: bool = False,
+        snr: float | None = None,
+        rssi: float | None = None,
     ) -> bytes:
         """Build CoT XML for a MeshCore advert."""
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -586,7 +614,7 @@ class MeshCoreBridge:
         event = Element("event", {
             "version": "2.0",
             "uid": uid,
-            "type": "a-f-G-U-C",
+            "type": cot_type,
             "how": "m-g",
             "time": now.strftime(fmt),
             "start": now.strftime(fmt),
@@ -627,6 +655,66 @@ class MeshCoreBridge:
         SubElement(detail, "__group", {"name": self.group, "role": "Team Member"})
 
         return tostring(event)
+
+    # -- Advertisement handler (sparse, uses node cache) --
+
+    def _handle_advertisement(self, payload: dict):
+        """Handle an ADVERTISEMENT event from the companion bridge.
+
+        These only contain a public key. If we've seen an RX_LOG_DATA
+        advert for this node before, re-emit a CoT from cached data
+        to refresh the stale timer. Otherwise emit a minimal marker.
+        """
+        inner = payload
+        if "payload" in payload and isinstance(payload["payload"], dict):
+            inner = payload["payload"]
+
+        pubkey = inner.get("public_key", "")
+        if not pubkey:
+            return
+
+        # Check node cache for rich data from a previous RX_LOG_DATA
+        cached = self.nodes.get(pubkey)
+        if cached:
+            callsign = cached.get("callsign", f"MC-{pubkey[:8]}")
+            lat = cached.get("lat", 0.0)
+            lon = cached.get("lon", 0.0)
+            node_type = cached.get("node_type", "Unknown")
+            cot_type = cached.get("cot_type", "a-f-G-U")
+        else:
+            callsign = f"MC-{pubkey[:8]}"
+            lat = 0.0
+            lon = 0.0
+            node_type = "Unknown"
+            cot_type = "a-f-G-U"
+
+        uid = f"MeshCore-{pubkey[:16]}"
+        has_gps = lat != 0.0 or lon != 0.0
+
+        cot_xml = self._make_advert_cot(
+            uid=uid,
+            callsign=callsign,
+            node_type=node_type,
+            cot_type=cot_type,
+            lat=lat,
+            lon=lon,
+            has_gps=has_gps,
+            snr=None,
+            rssi=None,
+        )
+
+        try:
+            self.rabbit.publish(uid, cot_xml, self.group)
+        except pika.exceptions.AMQPConnectionError:
+            log.warning("RabbitMQ connection lost, reconnecting...")
+            try:
+                self.rabbit.connect()
+                self.rabbit.publish(uid, cot_xml, self.group)
+            except Exception as e:
+                log.error(f"RabbitMQ reconnect failed: {e}")
+
+        gps_str = f"({lat:.6f}, {lon:.6f})" if has_gps else "(no GPS, cached={bool(cached)})"
+        log.info(f"Advert (refresh): {callsign} {gps_str}")
 
     def _resolve_callsign(self, pubkey_prefix: str) -> str:
         """Try to resolve a pubkey prefix to a human-readable callsign.

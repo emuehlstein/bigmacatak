@@ -333,6 +333,15 @@ class MeshCoreBridge:
             #                   meshcore/battery
             #                   meshcore/device_info
 
+            # Companion rx_log / event topics (includes RX_LOG_DATA with advert data)
+            if len(parts) >= 2 and parts[-1] in ("event", "rx_log"):
+                try:
+                    payload = json.loads(raw)
+                except json.JSONDecodeError:
+                    return
+                self._handle_generic_event(payload)
+                return
+
             # Companion message topics
             if len(parts) >= 4 and parts[1] == "message":
                 try:
@@ -481,6 +490,143 @@ class MeshCoreBridge:
                 log.error(f"RabbitMQ reconnect failed: {e}")
 
         log.info(f"GeoChat: [{sender_callsign}] → {chat_group}: {text}")
+
+    # -- Generic event handler (RX_LOG_DATA adverts) --
+
+    def _handle_generic_event(self, payload: dict):
+        """Handle generic events from the companion bridge.
+
+        We're primarily interested in RX_LOG_DATA events where
+        payload_typename == 'ADVERT' — these contain full advert data
+        including node name, GPS, and RF metadata.
+        """
+        # Unwrap nested structures — meshcore-mqtt serializes the Event
+        # object, so payload may be wrapped
+        inner = payload
+        if "payload" in payload and isinstance(payload["payload"], dict):
+            inner = payload["payload"]
+
+        # Only process advert packets from RX_LOG_DATA
+        payload_typename = inner.get("payload_typename", "")
+        if payload_typename != "ADVERT":
+            return
+
+        adv_name = inner.get("adv_name", "")
+        adv_key = inner.get("adv_key", "")
+        adv_lat = inner.get("adv_lat", 0.0)
+        adv_lon = inner.get("adv_lon", 0.0)
+        adv_type = inner.get("adv_type", 0)
+        snr = inner.get("snr", None)
+        rssi = inner.get("rssi", None)
+
+        if not adv_name or not adv_key:
+            return
+
+        # Determine node type from adv_type
+        # 0=unknown, 1=repeater, 2=chat node, 3=room server
+        type_names = {0: "Unknown", 1: "Repeater", 2: "Chat Node", 3: "Room Server"}
+        node_type = type_names.get(adv_type, f"Type-{adv_type}")
+
+        uid = f"MeshCore-{adv_key[:16]}"
+
+        # Build CoT — use actual GPS if available
+        has_gps = adv_lat != 0.0 or adv_lon != 0.0
+
+        cot_xml = self._make_advert_cot(
+            uid=uid,
+            callsign=adv_name,
+            node_type=node_type,
+            lat=adv_lat,
+            lon=adv_lon,
+            has_gps=has_gps,
+            snr=snr,
+            rssi=rssi,
+        )
+
+        try:
+            self.rabbit.publish(uid, cot_xml, self.group)
+        except pika.exceptions.AMQPConnectionError:
+            log.warning("RabbitMQ connection lost, reconnecting...")
+            try:
+                self.rabbit.connect()
+                self.rabbit.publish(uid, cot_xml, self.group)
+            except Exception as e:
+                log.error(f"RabbitMQ reconnect failed: {e}")
+
+        # Update node cache
+        self.nodes[adv_key] = {
+            "callsign": adv_name,
+            "last_seen": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+
+        gps_str = f"({adv_lat:.6f}, {adv_lon:.6f})" if has_gps else "(no GPS)"
+        rf_str = ""
+        if snr is not None:
+            rf_str = f" SNR:{snr}"
+        if rssi is not None:
+            rf_str += f" RSSI:{rssi}"
+        log.info(f"Advert: {adv_name} [{node_type}] {gps_str}{rf_str}")
+
+    def _make_advert_cot(
+        self,
+        uid: str,
+        callsign: str,
+        node_type: str,
+        lat: float,
+        lon: float,
+        has_gps: bool,
+        snr: float | None,
+        rssi: float | None,
+    ) -> bytes:
+        """Build CoT XML for a MeshCore advert."""
+        now = datetime.datetime.now(datetime.timezone.utc)
+        stale = now + datetime.timedelta(hours=self.stale_hours)
+        fmt = "%Y-%m-%dT%H:%M:%SZ"
+
+        event = Element("event", {
+            "version": "2.0",
+            "uid": uid,
+            "type": "a-f-G-U-C",
+            "how": "m-g",
+            "time": now.strftime(fmt),
+            "start": now.strftime(fmt),
+            "stale": stale.strftime(fmt),
+        })
+
+        if has_gps:
+            SubElement(event, "point", {
+                "lat": str(lat), "lon": str(lon), "hae": "0.0",
+                "ce": "100.0", "le": "100.0",
+            })
+        else:
+            SubElement(event, "point", {
+                "lat": "0.0", "lon": "0.0", "hae": "9999999.0",
+                "ce": "9999999.0", "le": "9999999.0",
+            })
+
+        detail = SubElement(event, "detail")
+        SubElement(detail, "takv", {
+            "device": node_type,
+            "version": "",
+            "platform": "MeshCore",
+            "os": "MeshCore",
+        })
+        SubElement(detail, "contact", {"callsign": callsign, "endpoint": "RF"})
+        SubElement(detail, "uid", {"Droid": callsign})
+
+        meshcore_attrs = {
+            "node_type": node_type,
+        }
+        if snr is not None:
+            meshcore_attrs["snr"] = str(snr)
+        if rssi is not None:
+            meshcore_attrs["rssi"] = str(rssi)
+        SubElement(detail, "meshcore", meshcore_attrs)
+
+        SubElement(detail, "status", {"battery": "0"})
+        SubElement(detail, "__group", {"name": self.group, "role": "Team Member"})
+
+        return tostring(event)
 
     def _resolve_callsign(self, pubkey_prefix: str) -> str:
         """Try to resolve a pubkey prefix to a human-readable callsign.

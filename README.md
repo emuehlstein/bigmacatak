@@ -1,5 +1,7 @@
 # BigMacATAK 🍔📡
 
+> **B**rian's **I**mages **G**et **M**angled on **A**pple **C**hips
+
 **OpenTAK Server (OTS) on macOS with MeshCore integration**
 
 A repeatable guide for running [OpenTAK Server](https://github.com/brian7704/OpenTAKServer) natively on Apple Silicon Macs, with MeshCore LoRa mesh network integration for ATAK.

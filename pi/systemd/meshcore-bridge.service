@@ -1,0 +1,15 @@
+[Unit]
+Description=MeshCore MQTT to OTS CoT Bridge
+After=rabbitmq-server.service
+Requires=rabbitmq-server.service
+
+[Service]
+Type=simple
+User=__BIGMAC_USER__
+WorkingDirectory=__BIGMAC_DATA__
+ExecStart=__BIGMAC_VENV__/bin/python3 __BIGMAC_DATA__/meshcore_bridge.py --config __BIGMAC_DATA__/config.yml
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

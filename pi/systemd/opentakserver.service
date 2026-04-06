@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenTAK Server
+After=network.target postgresql.service rabbitmq-server.service
+Requires=postgresql.service rabbitmq-server.service
+
+[Service]
+Type=simple
+User=__BIGMAC_USER__
+WorkingDirectory=__BIGMAC_DATA__
+ExecStart=__BIGMAC_VENV__/bin/opentakserver
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

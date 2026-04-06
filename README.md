@@ -2,9 +2,16 @@
 
 > **B**rian's **I**mages **G**et **M**angled on **A**pple **C**hips
 
-**OpenTAK Server (OTS) on macOS with MeshCore integration**
+**OpenTAK Server (OTS) for macOS + Raspberry Pi with MeshCore integration**
 
-A repeatable guide for running [OpenTAK Server](https://github.com/brian7704/OpenTAKServer) natively on Apple Silicon Macs, with MeshCore LoRa mesh network integration for ATAK.
+A repeatable guide for running [OpenTAK Server](https://github.com/brian7704/OpenTAKServer) natively on Apple Silicon Macs and Raspberry Pi, with MeshCore/Meshtastic LoRa mesh network integration and ADS-B aircraft tracking for ATAK.
+
+## Platforms
+
+| Platform | Directory | Description |
+|----------|-----------|-------------|
+| **macOS** | [This directory](#quick-start) | Native OTS on Apple Silicon |
+| **Raspberry Pi** | [`pi/`](pi/README.md) | Complete Pi installer with ADS-B + bridges |
 
 ## Why Native macOS?
 

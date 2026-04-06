@@ -1,0 +1,14 @@
+[Unit]
+Description=readsb ADS-B Decoder (1090MHz)
+After=network.target
+
+[Service]
+Type=simple
+User=__BIGMAC_USER__
+ExecStartPre=/bin/mkdir -p /run/readsb
+ExecStart=/usr/local/bin/readsb --device-type rtlsdr --gain -10 --fix --write-json=/run/readsb --write-json-every=1
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

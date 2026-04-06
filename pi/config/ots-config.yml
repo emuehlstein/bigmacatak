@@ -1,0 +1,163 @@
+# BigMacATAK Pi — OpenTAK Server Configuration
+# Paths are set by install.sh (sed replaces __BIGMAC_DATA__ and __BIGMAC_USER__)
+
+ALLOWED_EXTENSIONS:
+- zip
+- xml
+- txt
+- pdf
+- png
+- jpg
+- jpeg
+- gif
+- kml
+- kmz
+- p12
+- tif
+- sqlite
+
+DEBUG: false
+
+JOBS:
+- func: opentakserver.blueprints.scheduled_jobs:get_adsb_data
+  id: get_adsb_data
+  minutes: 1
+  next_run_time: null
+  seconds: 0
+  trigger: interval
+- func: opentakserver.blueprints.scheduled_jobs:delete_video_recordings
+  id: delete_video_recordings
+  minutes: 1
+  next_run_time: null
+  seconds: 0
+  trigger: interval
+- day: '*'
+  func: opentakserver.blueprints.scheduled_jobs:purge_data
+  hour: 0
+  id: purge_data
+  minute: 0
+  next_run_time: null
+  trigger: cron
+- func: opentakserver.blueprints.scheduled_jobs:delete_old_data
+  id: delete_old_data
+  minutes: 1
+  next_run_time: null
+  seconds: 0
+  trigger: interval
+
+# OTS Core
+OTS_CA_FOLDER: __BIGMAC_DATA__/ca
+OTS_CA_NAME: BigMacATAK-CA
+OTS_CA_PASSWORD: atakatak
+OTS_CA_CITY: YY
+OTS_CA_COUNTRY: WW
+OTS_CA_EXPIRATION_TIME: 3650
+OTS_CA_ORGANIZATION: ZZ
+OTS_CA_ORGANIZATIONAL_UNIT: BigMacATAK
+OTS_CA_STATE: XX
+OTS_CA_SUBJECT: /C=WW/ST=XX/L=YY/O=ZZ/OU=BigMacATAK
+OTS_COT_PARSER_PROCESSES: 1
+OTS_DATA_FOLDER: __BIGMAC_DATA__
+OTS_DELETE_OLD_DATA_WEEKS: 1
+OTS_DELETE_OLD_DATA_DAYS: 0
+OTS_DELETE_OLD_DATA_HOURS: 0
+OTS_DELETE_OLD_DATA_MINUTES: 0
+OTS_DELETE_OLD_DATA_SECONDS: 0
+OTS_ENABLE_CHANNELS: true
+OTS_ENABLE_EMAIL: false
+OTS_ENABLE_LDAP: false
+OTS_ENABLE_PLUGINS: true
+OTS_ENABLE_TCP_STREAMING_PORT: true
+OTS_IP_WHITELIST:
+- 127.0.0.1
+OTS_LISTENER_ADDRESS: 127.0.0.1
+OTS_LISTENER_PORT: 8081
+OTS_LOG_ROTATE_WHEN: midnight
+OTS_LOG_ROTATE_INTERVAL: 0
+OTS_MARTI_HTTPS_PORT: 8443
+OTS_MARTI_HTTP_PORT: 8080
+OTS_PROFILE_MAP_SOURCES: true
+
+# MediaMTX
+OTS_MEDIAMTX_ENABLE: true
+OTS_MEDIAMTX_API_ADDRESS: http://localhost:9997
+OTS_MEDIAMTX_TOKEN: bigmacatak-mediamtx-token
+
+# Meshtastic (OTS built-in controller — we use our own bridge instead)
+OTS_ENABLE_MESHTASTIC: false
+
+# MeshCore (custom bridge via MQTT → RabbitMQ)
+OTS_ENABLE_MESHCORE: true
+OTS_MESHCORE_MQTT_HOST: "localhost"
+OTS_MESHCORE_MQTT_PORT: 1883
+OTS_MESHCORE_TOPIC: "meshcore"
+OTS_MESHCORE_GROUP: "MeshCore"
+OTS_MESHCORE_STALE_HOURS: 1
+
+# ADS-B (via adsbcot, not OTS built-in)
+OTS_ADSB_API_KEY: null
+OTS_ADSB_API_URL: https://api.airplanes.live/v2/point/
+OTS_ADSB_GROUP: ADS-B
+OTS_ADSB_LAT: 0.0
+OTS_ADSB_LON: 0.0
+OTS_ADSB_RADIUS: 10
+
+# RabbitMQ
+OTS_RABBITMQ_SERVER_ADDRESS: 127.0.0.1
+OTS_RABBITMQ_USERNAME: guest
+OTS_RABBITMQ_PASSWORD: guest
+OTS_RABBITMQ_PREFETCH: 2
+OTS_RABBITMQ_TTL: '86400000'
+
+# SSL / Security
+OTS_SSL_STREAMING_PORT: 8089
+OTS_TCP_STREAMING_PORT: 8088
+OTS_SSL_VERIFICATION_MODE: 2
+OTS_SSL_CERT_HEADER: X-Ssl-Cert
+
+# Database
+SQLALCHEMY_DATABASE_URI: postgresql+psycopg://ots@127.0.0.1/ots
+SQLALCHEMY_ECHO: false
+SQLALCHEMY_TRACK_MODIFICATIONS: false
+SQLALCHEMY_RECORD_QUERIES: false
+SQLALCHEMY_ENGINE_OPTIONS:
+  pool_pre_ping: true
+
+# Web Security
+SECRET_KEY: CHANGE_ME_GENERATE_A_REAL_KEY
+SECURITY_CHANGEABLE: true
+SECURITY_CHANGE_URL: /password/change
+SECURITY_CONFIRMABLE: false
+SECURITY_CSRF_COOKIE_NAME: XSRF-TOKEN
+SECURITY_CSRF_IGNORE_UNAUTH_ENDPOINTS: true
+SECURITY_CSRF_PROTECT_MECHANISMS:
+- session
+- basic
+SECURITY_LOGIN_WITHOUT_CONFIRMATION: true
+SECURITY_PASSWORD_CONFIRM_REQUIRED: false
+SECURITY_PASSWORD_LENGTH_MIN: 8
+SECURITY_PASSWORD_SALT: CHANGE_ME_GENERATE_A_REAL_SALT
+SECURITY_RECOVERABLE: false
+SECURITY_REDIRECT_BEHAVIOR: spa
+SECURITY_REGISTERABLE: false
+SECURITY_RETURN_GENERIC_RESPONSES: true
+SECURITY_TOTP_ISSUER: BigMacATAK
+SECURITY_TOTP_SECRETS:
+  1: CHANGE_ME_GENERATE_A_REAL_TOTP_SECRET
+SECURITY_TRACKABLE: true
+SECURITY_TWO_FACTOR: true
+SECURITY_TWO_FACTOR_ALWAYS_VALIDATE: false
+SECURITY_TWO_FACTOR_ENABLED_METHODS:
+- authenticator
+SECURITY_URL_PREFIX: /api
+SECURITY_USERNAME_ENABLE: true
+SECURITY_USERNAME_MIN_LENGTH: 1
+SECURITY_USERNAME_REQUIRED: true
+
+SESSION_COOKIE_SAMESITE: strict
+REMEMBER_COOKIE_SAMESITE: strict
+SCHEDULER_API_ENABLED: false
+
+UPLOAD_FOLDER: __BIGMAC_DATA__/uploads
+WTF_CSRF_CHECK_DEFAULT: false
+WTF_CSRF_TIME_LIMIT: null

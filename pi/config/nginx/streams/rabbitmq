@@ -1,0 +1,8 @@
+# SSL Proxy for RabbitMQ MQTT (8883 → 1883)
+server {
+    listen     8883 ssl;
+    proxy_pass 127.0.0.1:1883;
+
+    ssl_certificate __BIGMAC_DATA__/ca/certs/opentakserver/opentakserver.pem;
+    ssl_certificate_key __BIGMAC_DATA__/ca/certs/opentakserver/opentakserver.nopass.key;
+}

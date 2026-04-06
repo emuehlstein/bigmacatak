@@ -272,6 +272,15 @@ sudo -u postgres dropdb ots
 sudo -u postgres dropuser ots
 ```
 
+## Roadmap
+
+| Feature | Status | Doc |
+|---------|--------|-----|
+| TAK Server Federation | 🗺️ Planned | [docs/federation.md](docs/federation.md) |
+| Tailscale auto-config | 💭 Idea | — |
+| Web-based setup wizard | 💭 Idea | — |
+| Docker alternative | 💭 Idea | — |
+
 ## License
 
 MIT

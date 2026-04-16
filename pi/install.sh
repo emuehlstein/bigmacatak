@@ -45,6 +45,16 @@ if [[ ! -f /etc/debian_version ]]; then
     exit 1
 fi
 
+# Check Debian version
+DEBIAN_VERSION=$(cat /etc/debian_version | cut -d. -f1)
+if [[ "${DEBIAN_VERSION}" -lt 12 ]]; then
+    err "Debian 12+ required. Detected: $(cat /etc/debian_version)"
+    exit 1
+fi
+if [[ "${DEBIAN_VERSION}" -ge 13 ]]; then
+    log "  Debian 13+ detected — gevent may show Python 3.13 assertion warnings (non-fatal)"
+fi
+
 log "BigMacATAK Pi Installer"
 log "  User:  ${BIGMAC_USER}"
 log "  Data:  ${BIGMAC_DATA}"

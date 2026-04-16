@@ -20,7 +20,7 @@
 ## Requirements
 
 - **Raspberry Pi 4/5** (4GB+ RAM recommended)
-- **Debian 12+ / Raspberry Pi OS (Bookworm+)** — arm64
+- **Debian 13 (Trixie) / Raspberry Pi OS** — arm64 (Debian 12/Bookworm also works)
 - **Storage**: 16GB+ SD card or SSD (SSD strongly recommended)
 - **Optional**: RTL-SDR dongle for ADS-B
 - **Optional**: MeshCore companion radio

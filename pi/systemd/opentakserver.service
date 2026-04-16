@@ -7,6 +7,8 @@ Requires=postgresql.service rabbitmq-server.service
 Type=simple
 User=__BIGMAC_USER__
 WorkingDirectory=__BIGMAC_DATA__
+# Use disk-backed tmp instead of RAM-backed tmpfs for large file uploads
+Environment=TMPDIR=__BIGMAC_DATA__/tmp
 ExecStart=__BIGMAC_VENV__/bin/opentakserver
 Restart=on-failure
 RestartSec=10

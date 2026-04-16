@@ -195,6 +195,17 @@ sudo systemctl restart opentakserver
     └── config.ini          # adsbcot configuration
 ```
 
+## Patches Applied
+
+The installer applies the following patches to OTS for better Raspberry Pi compatibility:
+
+| Patch | Problem | Fix |
+|-------|---------|-----|
+| **BigInteger size** | `data_packages.size` is INTEGER (max 2.1 GB) | Patched model + DB column to BigInteger/bigint |
+| **TMPDIR** | `/tmp` is RAM-backed tmpfs on Debian 13 — large uploads fill it | Systemd service sets `TMPDIR` to disk-backed `~/ots/tmp` |
+| **MAX_CONTENT_LENGTH** | Default 0 = reject all uploads | Config set to 10 GB |
+| **gevent/Python 3.13** | gevent asserts `version < 3.13` | Non-fatal warning, no fix needed |
+
 ## Troubleshooting
 
 ### OTS won't start

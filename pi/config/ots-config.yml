@@ -159,5 +159,8 @@ REMEMBER_COOKIE_SAMESITE: strict
 SCHEDULER_API_ENABLED: false
 
 UPLOAD_FOLDER: __BIGMAC_DATA__/uploads
+
+# Allow large data package uploads (10 GB). Default 0 = reject all.
+MAX_CONTENT_LENGTH: 10737418240
 WTF_CSRF_CHECK_DEFAULT: false
 WTF_CSRF_TIME_LIMIT: null

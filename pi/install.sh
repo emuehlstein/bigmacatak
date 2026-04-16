@@ -214,7 +214,7 @@ fi
 
 log "Step 5: Setting up OTS data directory..."
 
-mkdir -p "${BIGMAC_DATA}"/{uploads,logs,ca}
+mkdir -p "${BIGMAC_DATA}"/{uploads,logs,ca,tmp}
 
 # Copy OTS config if not present
 if [[ ! -f "${BIGMAC_DATA}/config.yml" ]]; then
@@ -465,6 +465,36 @@ if [[ "${BIGMAC_SKIP_MEDIAMTX}" != "1" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+#  Step 10.5: Patch OTS for large file support (>2 GB data packages)
+# ---------------------------------------------------------------------------
+
+log "Step 10.5: Patching OTS for large file support..."
+
+# OTS DataPackage model uses Integer for 'size' column — max 2.1 GB.
+# Patch to BigInteger so data packages >2 GB can be uploaded.
+DP_MODEL="${BIGMAC_VENV}/lib/python*/site-packages/opentakserver/models/DataPackage.py"
+DP_MODEL=$(ls ${DP_MODEL} 2>/dev/null | head -1)
+
+if [[ -n "${DP_MODEL}" ]]; then
+    if grep -q 'mapped_column(Integer)' "${DP_MODEL}" 2>/dev/null; then
+        # Add BigInteger import if not present
+        if ! grep -q 'BigInteger' "${DP_MODEL}"; then
+            sed -i 's/from sqlalchemy import/from sqlalchemy import BigInteger,/' "${DP_MODEL}"
+        fi
+        # Patch size column: Integer → BigInteger
+        sed -i '/size.*mapped_column/s/mapped_column(Integer)/mapped_column(BigInteger)/' "${DP_MODEL}"
+        log "  ✓ Patched DataPackage model (size: Integer → BigInteger)"
+    else
+        log "  ✓ DataPackage model already patched or uses BigInteger"
+    fi
+else
+    warn "  ⚠ Could not find DataPackage.py — skip BigInteger patch"
+fi
+
+# Also install psycopg2-binary for direct DB operations
+"${BIGMAC_VENV}/bin/pip" install psycopg2-binary -q 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
 #  Step 11: Start Core Services
 # ---------------------------------------------------------------------------
 
@@ -485,6 +515,14 @@ for svc in eud-handler-tcp eud-handler-ssl cot-parser; do
 done
 
 log "  ✓ Core services started"
+
+# Migrate DB column after OTS creates tables (first run)
+if [[ -n "${DP_MODEL}" ]]; then
+    log "  Migrating data_packages.size to bigint..."
+    sudo -u postgres psql -d ots -c 'ALTER TABLE data_packages ALTER COLUMN size TYPE bigint;' 2>/dev/null && \
+        log "  ✓ data_packages.size migrated to bigint" || \
+        log "  ✓ data_packages.size already bigint or table not yet created"
+fi
 
 # ---------------------------------------------------------------------------
 #  Summary

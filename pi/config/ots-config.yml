@@ -78,29 +78,17 @@ OTS_MARTI_HTTPS_PORT: 8443
 OTS_MARTI_HTTP_PORT: 8080
 OTS_PROFILE_MAP_SOURCES: true
 
-# MediaMTX
-OTS_MEDIAMTX_ENABLE: true
-OTS_MEDIAMTX_API_ADDRESS: http://localhost:9997
-OTS_MEDIAMTX_TOKEN: bigmacatak-mediamtx-token
+# MediaMTX (disabled — upstream-only)
+OTS_MEDIAMTX_ENABLE: false
 
-# Meshtastic (OTS built-in controller — we use our own bridge instead)
+# Meshtastic (disabled — upstream-only)
 OTS_ENABLE_MESHTASTIC: false
 
-# MeshCore (custom bridge via MQTT → RabbitMQ)
-OTS_ENABLE_MESHCORE: true
-OTS_MESHCORE_MQTT_HOST: "localhost"
-OTS_MESHCORE_MQTT_PORT: 1883
-OTS_MESHCORE_TOPIC: "meshcore"
-OTS_MESHCORE_GROUP: "MeshCore"
-OTS_MESHCORE_STALE_HOURS: 1
+# MeshCore (disabled — upstream-only)
+OTS_ENABLE_MESHCORE: false
 
-# ADS-B (via adsbcot, not OTS built-in)
+# ADS-B (disabled — upstream-only)
 OTS_ADSB_API_KEY: null
-OTS_ADSB_API_URL: https://api.airplanes.live/v2/point/
-OTS_ADSB_GROUP: ADS-B
-OTS_ADSB_LAT: 0.0
-OTS_ADSB_LON: 0.0
-OTS_ADSB_RADIUS: 10
 
 # RabbitMQ
 OTS_RABBITMQ_SERVER_ADDRESS: 127.0.0.1
